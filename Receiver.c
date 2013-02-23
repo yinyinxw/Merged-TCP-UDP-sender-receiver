@@ -1,11 +1,11 @@
-// EE122 Project 1 - Receiver
+// EE122 Project 1 - Receiver.c
 // Xiaodian Wang    (SID: 20998240)
 // Arnab Mukherji   (SID:)
 /*
 ** Receiver description: 
  * Given a connection type, it sets up the according socket, and waits for a connection from a transmitter. The transmitter will send data to the Receiver, with the Receiver will read into an output file. 
 ** Receiver input:
- * Receiver takes in 1 command-line argument, a string of either "DGRAM" or "STREAM", which will specify which socket type to use. Inputting "DGRAM" will construct a datagram socket to set up a UDP connection. Inputting "STREAM" will construct a byte stream socket to set up a TCP connection.
+ * Receiver takes in 1 command-line argument, a case-insensitive string of either "DGRAM" or "STREAM", which will specify which socket type to use. Inputting "DGRAM" will construct a datagram socket to set up a UDP connection. Inputting "STREAM" will construct a byte stream socket to set up a TCP connection.
 ** Receiver output: 
  * Receiver returns the int 0 for successful socket setup and transmission of data, and a nonzero integer otherwise. An output file made from the received data will be constructed and contained in the same directory that the Receiver is in. 
 */
@@ -27,21 +27,20 @@
 #define PORT "65432"
 //For TCP connection, define the amount of pending connections queue will hold
 #define BACKLOG 10
-//For TCP connection, define max amount of bytes we can get at once
-#define TCP_MAXDATASIZE 1024
-//For UDP connection, define the size of our buffer/packets
-#define DGRAM_MAXDATASIZE 500
+//Define max amount of bytes we can get at once. This will determine the size of the buffer (or, for UDP, the size of each packet). 
+#define MAXDATASIZE 1024
+
 
 //Get the socket address, IPv6 or IPv6 (taken from Beej's guide)
 /*If the sa_family field is AF_INET (IPv4), return the IPv4 address. Otherwise return the IPv6 address.*/
-void *get_in_addr(struct sockaddr *sa) {
+void *get_in_addr(struct sockaddr *sa) { 
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-/*main() takes in 1 case-insensitive command-line argument: 'stream' or 'dgram,' and constructs a stream socket, or datagram socket, respectively.*/
+/* main() takes in 1 case-insensitive command-line argument: 'stream' or 'dgram,' and constructs a stream socket, or datagram socket, respectively.*/
 int main (int argc, char *argv[]) {
     //declare variables for socket setup, used for both TCP and UDP connection
     const char *connection_option;
@@ -58,10 +57,9 @@ int main (int argc, char *argv[]) {
     //declare variables for file writing
     FILE *file_to_write; //file handle
     char file_name_w[64];
-    int counter = 0; //counter for separately naming files written for each new connection
     int total_bytes_read = 0;
     size_t num_from_remote;
-    unsigned char stream_buffer[TCP_MAXDATASIZE];
+    unsigned char buffer[MAXDATASIZE];
     
     connection_option = argv[1];
     memset(&hints, 0, sizeof hints);
@@ -126,12 +124,12 @@ int main (int argc, char *argv[]) {
             printf("Receiver: got TCP connection from %s\n", s);
             
             if (new_fd > 0) {
-                sprintf(file_name_w, "stream_file_written_%d\n", counter++);
+                sprintf(file_name_w, "stream_file_written");
                 file_to_write = fopen(file_name_w, "a");
                 total_bytes_read = 0;
-                
-                while((num_from_remote = recv(new_fd, stream_buffer, TCP_MAXDATASIZE - 1, 0)) != 0) {
-                    total_bytes_read += fwrite(stream_buffer, 1, num_from_remote, file_to_write);
+                //Receive data into buffer, and write into the file. The total amount of bytes read (total_bytes_read) is equal to the amount of bytes written into the file.
+                while((num_from_remote = recv(new_fd, buffer, MAXDATASIZE - 1, 0)) != 0) {
+                    total_bytes_read += fwrite(buffer, 1, num_from_remote, file_to_write);
                 }
                 fflush(file_to_write);
                 fclose(file_to_write);
