@@ -1,4 +1,4 @@
-// EE122 Project 1 - Sender
+// EE122 Project 1 - Sender.c
 // Xiaodian Wang    (SID: 20998240)
 // Arnab Mukherji   (SID: )
 /*
@@ -24,10 +24,8 @@
 
 //Define port that the Sender will be connecting to
 #define PORT "65432"
-//For TCP connection, define max amount of bytes we can send at once
-#define TCP_MAXDATASIZE 1024
-//For UDP connection, define the size of our buffer/packets
-#define UDP_MAXDATASIZE 500
+//Define max amount of bytes we can send at once
+#define MAXDATASIZE 1024
 
 //Get the socket address, IPv6 or IPv6 (taken from Beej's guide)
 /*If the sa_family field is AF_INET (IPv4), return the IPv4 address. Otherwise return the IPv6 address.*/
@@ -57,7 +55,7 @@ int main(int argc, char *argv[]) {
     
     //Declare variables for file transfer
     int total_bytes_sent, bytes_left; //n is bytes_left, m is bytes_sent
-    char stream_buffer[TCP_MAXDATASIZE];
+    char buffer[MAXDATASIZE];
     FILE *file_to_read;
     size_t bytes_sent;
     unsigned char *buffer_ptr = NULL;
@@ -112,9 +110,9 @@ int main(int argc, char *argv[]) {
         
     //Initialize the counter (total_bytes_sent) for the amount of bytes that the sender reads and sends to the receiver. Bytes_left and bytes_sent act to position where the data is read into the buffer. In the initial condition of the while loop, bytes_read = # of bytes read into the buffer, which may or may not be equal to the bytes_sent out of the buffer. bytes_sent is subtracted from bytes_left. bytes_sent is also added to the total number of bytes sent (total_bytes_sent), and the buffer pointer is shifed by the amount total_bytes_sent.
         total_bytes_sent = 0;
-        while ((bytes_left = fread(stream_buffer, 1, TCP_MAXDATASIZE, file_to_read)) != 0) {
+        while ((bytes_left = fread(buffer, 1, MAXDATASIZE, file_to_read)) != 0) {
             printf("Bytes read into buffer = %d\n", bytes_left);
-            buffer_ptr = &stream_buffer[0];
+            buffer_ptr = &buffer[0];
             while (bytes_left != 0) {
                 bytes_sent = send(sockfd, buffer_ptr, (size_t)bytes_left, 0);
                 printf("Bytes sent: %d\n", (int) bytes_sent);
