@@ -54,11 +54,17 @@ int main(int argc, char *argv[]) {
     char s[INET_ADDRSTRLEN];
     
     //Declare variables for file transfer
-    int total_bytes_sent, bytes_left; //n is bytes_left, m is bytes_sent
-    char buffer[MAXDATASIZE];
+    int total_bytes_sent, bytes_left;
+    unsigned char buffer[MAXDATASIZE];
     FILE *file_to_read;
     size_t bytes_sent;
-    unsigned char *buffer_ptr = NULL;
+    unsigned char *buffer_beg_ptr, *buffer_data_ptr;
+    
+    //Declare variables used in UDP file transfer only
+    int packet_counter;
+    uint32_t HEADER = 0xaaaaaaaa;
+    uint32_t MAGICNUM = 0xdeadbeef;
+    int last_packet;
     
     //Loading struct addrinfo hints
     memset(&hints, 0, sizeof hints);
@@ -112,16 +118,55 @@ int main(int argc, char *argv[]) {
         total_bytes_sent = 0;
         while ((bytes_left = fread(buffer, 1, MAXDATASIZE, file_to_read)) != 0) {
             printf("Bytes read into buffer = %d\n", bytes_left);
-            buffer_ptr = &buffer[0];
+            buffer_data_ptr = &buffer[0];
             while (bytes_left != 0) {
-                bytes_sent = send(sockfd, buffer_ptr, (size_t)bytes_left, 0);
+                bytes_sent = send(sockfd, buffer_data_ptr, (size_t)bytes_left, 0);
                 printf("Bytes sent: %d\n", (int) bytes_sent);
                 bytes_left -= (int) bytes_sent;
                 total_bytes_sent += (int) bytes_sent;
-                buffer_ptr += (int)bytes_sent;
+                buffer_data_ptr += (int)bytes_sent;
             }
             printf("Total bytes sent = %d\n", total_bytes_sent);
         }
+        fclose(file_to_read);
+        close(sockfd);
+        return 0;
+    }
+    
+    if (strcasecmp(connection_option, "dgram") == 0) {
+        
+        //Print out the IP address of the receiver that the sender is connecting to
+        inet_ntop(receiver_info->ai_family, get_in_addr((struct sockaddr*)receiver_info->ai_addr), s, sizeof s);
+        printf("Sender: sending data to %s\n", s);
+        
+        //open the file data
+        file_to_read = fopen(target_file, "r");
+        if (file_to_read == NULL) {
+            printf("Open file error: %s\n", target_file);
+            return 7;
+        }
+        
+        /*Each packet that is sent out will have a 4-byte hex header, and a 1020-byte payload (the real file data). buffer_beg_ptr points to the beginning of the buffer where the hex header will go, and buffer_data_ptr points to the index where the rest of the payload will begin.*/
+        total_bytes_sent = 0;
+        int packet_counter = 1;
+        buffer_beg_ptr = &buffer[0]; //pointer to position of 4-byte packet header
+        buffer_data_ptr = &buffer[4]; //pointer to position of payload
+        while ((bytes_left = fread (buffer_data_ptr, 1, MAXDATASIZE-4, file_to_read)) > 0) {
+            printf("Number of bytes read: %d\n", bytes_left);
+            uint32_t HEADER_netorder = htonl(HEADER);
+            memcpy(&buffer[0], (void *)&HEADER_netorder, (size_t)sizeof HEADER);
+        
+            bytes_sent = sendto(sockfd, buffer_beg_ptr, bytes_left+4, 0, receiver_info->ai_addr, receiver_info->ai_addrlen);
+            bytes_left -=(int)bytes_sent;
+            total_bytes_sent += (int)bytes_sent;
+            printf("Total bytes sent: %d\n", (int)total_bytes_sent);
+            packet_counter++;
+        }
+        
+        //Once we've reached the end (bytes_left = 0), we send out a last packet with the hex header oxDEADBEEF to let the receiver know that we are done.
+        uint32_t MAGICNUM_netorder = htonl(MAGICNUM);
+        memcpy(&buffer[0], (void *)&MAGICNUM_netorder, (size_t)sizeof MAGICNUM);
+        last_packet = sendto(sockfd, buffer_beg_ptr, MAXDATASIZE, 0, receiver_info->ai_addr, receiver_info->ai_addrlen);
         fclose(file_to_read);
         close(sockfd);
         return 0;

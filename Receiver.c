@@ -61,11 +61,20 @@ int main (int argc, char *argv[]) {
     size_t num_from_remote;
     unsigned char buffer[MAXDATASIZE];
     
+    //Declare variables used only in the UDP connection
+    uint32_t packet_header;
+    uint32_t header_host_num;
+    
     connection_option = argv[1];
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_flags = AI_PASSIVE; //use my IP
     
+    //Error check to make sure you're inputting the right # of args
+    if (argc != 2) {
+        perror("Error: incorrect number of command-line arguments\n");
+        return 1;
+    }
     if (strcasecmp(connection_option, "stream") == 0) {
         hints.ai_socktype = SOCK_STREAM; //socket type will be stream
         printf("Establish a TCP connection\n");
@@ -143,4 +152,33 @@ int main (int argc, char *argv[]) {
         }
     }
     
+    if (strcasecmp (connection_option, "dgram") == 0) {
+        printf("Datagram socket receiver: waiting to receive data...");
+
+        total_bytes_read = 0;
+        int packet_counter = 1;
+        sprintf(file_name_w, "datagram_file_written");
+        file_to_write = fopen(file_name_w, "a");
+        socklen_t addr_len = sizeof their_addr;
+        
+        while ((num_from_remote = recvfrom(sockfd, buffer, MAXDATASIZE-1, 0, (struct sockaddr *)&their_addr, &addr_len)) > 0) {
+            memcpy((void *)&packet_header, &buffer[0], 4);
+            header_host_num = ntohl(packet_header);
+            printf("Receiving %d bytes\n", (int)num_from_remote);
+            if (header_host_num == 0xdeadbeef) {
+                //header_host_num = 0xdeadbeef, reached end of file transfer
+                fclose(file_to_write);
+                printf("Reached end of file, total number of packets received: %d\n", total_bytes_read);
+                close(sockfd);
+                return 0;
+            }
+            else {
+                total_bytes_read +=fwrite(buffer+4, 1, num_from_remote-4, file_to_write);
+            }                
+
+
+        }
+    }
+
 }
+
