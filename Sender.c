@@ -128,6 +128,13 @@ int main(int argc, char *argv[]) {
             }
             printf("Total bytes sent = %d\n", total_bytes_sent);
         }
+        
+        /*Sending application knows that recipient has received all of the data if the last outputs of fread() and send() are >=0. If at any point the output of send() < 0, the while loop will terminate, which will return the last values of m and n anyways. TCP is a reliable transport protocol, so all bytes sent by the transmitter will be equal and same order as all bytes received by the recipient. */
+        if (bytes_left < 0 || bytes_sent< 0) { //last outputs of send(), fread()
+            printf("Error in file data reading/sending, receiver was not able to get all data\n");
+        } else {
+            printf("Receiver received all data, total bytes sent is %d\n", total_bytes_sent);
+        }
         fclose(file_to_read);
         close(sockfd);
         return 0;

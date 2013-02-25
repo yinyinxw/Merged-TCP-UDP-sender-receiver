@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <sys/time.h>
 
 //Define port that the Receiver will be connecting to
 #define PORT "65432"
@@ -64,11 +65,19 @@ int main (int argc, char *argv[]) {
     //Declare variables used only in the UDP connection
     uint32_t packet_header;
     uint32_t header_host_num;
-    
+    int ack_msg = 1;
+    int ack_msg_byte; 
     connection_option = argv[1];
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_flags = AI_PASSIVE; //use my IP
+    
+    //Declare variables for getting the arrival time of packets for the UDP connection
+    struct timeval current_time;
+    suseconds_t delta_time, cumulative_delta = 0;
+    suseconds_t arrival_time_1, arrival_time_2 = 0;
+    suseconds_t avg_arrival_time;
+    int receive_count;
     
     //Error check to make sure you're inputting the right # of args
     if (argc != 2) {
@@ -160,23 +169,44 @@ int main (int argc, char *argv[]) {
         sprintf(file_name_w, "datagram_file_written");
         file_to_write = fopen(file_name_w, "a");
         socklen_t addr_len = sizeof their_addr;
-        
+                
         while ((num_from_remote = recvfrom(sockfd, buffer, MAXDATASIZE-1, 0, (struct sockaddr *)&their_addr, &addr_len)) > 0) {
+            
+            /*Compute the time difference between packets received.
+             Calculates delta_time (microsec), which is the arrival time difference between
+             2 consecutive packets. All of the delta values are added up into
+             cumulate_delta.
+             */
+            gettimeofday(&current_time, 0);
+            arrival_time_1 = current_time.tv_usec;
+            printf("Arrival_time_1= %d\n", (int)arrival_time_1);
+            if (arrival_time_2 != 0) {
+                delta_time = arrival_time_1 - arrival_time_2;
+                cumulative_delta += delta_time;
+                printf("delta time is %d\n cumulative delta is %d\n", (int)delta_time, (int)cumulative_delta);
+
+            }
+            receive_count++;
+            arrival_time_2 = arrival_time_1;
+            
             memcpy((void *)&packet_header, &buffer[0], 4);
             header_host_num = ntohl(packet_header);
             printf("Receiving %d bytes\n", (int)num_from_remote);
+            
             if (header_host_num == 0xdeadbeef) {
                 //header_host_num = 0xdeadbeef, reached end of file transfer
                 fclose(file_to_write);
                 printf("Reached end of file, total number of packets received: %d\n", total_bytes_read);
+                /*Calculate the average delay difference between consecutive individual packets, and use this delay to measure the bandwidth of the bottleneck link later on.*/
+                printf("Final receive count: %d\n", receive_count);
+                avg_arrival_time =cumulative_delta / receive_count;
+                printf("Average delay difference btwn individual packets: %d microseconds\n", (int)avg_arrival_time);
                 close(sockfd);
                 return 0;
             }
             else {
                 total_bytes_read +=fwrite(buffer+4, 1, num_from_remote-4, file_to_write);
-            }                
-
-
+            }
         }
     }
 
